@@ -63,17 +63,17 @@ on:
         description: 'Get the latest KSU Manager and SUS module?'
         required: true
         type: boolean
-        default: true
+        default: false
       onlyAk3:
         description: 'Upload only the AK3 compressed file? (No boot.img, faster)'
         required: false
         type: boolean
-        default: false
+        default: true
       
 
 jobs:
-  build-kernel-a12-5-10:
-    uses: ./.github/workflows/kernel-a12-5.10.yml
+  build-kernel-a12-5-10-236:
+    uses: ./.github/workflows/kernel-a12-5.10.236.yml
     secrets: inherit
     with:
       kernelsu_variant: ${{ inputs.kernelsu_variant }}
