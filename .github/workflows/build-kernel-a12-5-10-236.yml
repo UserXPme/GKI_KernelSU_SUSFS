@@ -45,7 +45,7 @@ on:
         type: boolean
         default: true
       use_bbg:
-        description: 'Enable BBG anti-formatting patch? (Disable error occurs.)'
+        description: 'Enable BBG anti-formatting patch? (Disable if any error occurs.)'
         required: true
         type: boolean
         default: true
