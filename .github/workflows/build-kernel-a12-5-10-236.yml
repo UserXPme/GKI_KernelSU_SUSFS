@@ -1,4 +1,4 @@
-name: Compile_kernel_a12-5-10-236,246
+name: Compile_kernel_a12-5-10-236-246
 
 permissions:
   contents: write  # Allow writing to repository contents (for pushing tags)
