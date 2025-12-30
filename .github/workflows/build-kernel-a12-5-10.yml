@@ -50,6 +50,11 @@ on:
         required: true
         type: boolean
         default: false
+      BBG:
+        description: 'Should kernel-level blocking of unauthorized writes to critical partitions/device nodes (LSM) be enabled?'
+        required: true
+        type: boolean
+        default: false
       get_manager:
         description: 'Get latest KSU Manager? (Experimental feature, please disable if errors occur)'
         required: true
@@ -68,6 +73,7 @@ jobs:
       use_zram: ${{ inputs.use_zram }}
       use_kpm: ${{ inputs.use_kpm }}
       set_defbbr: ${{ inputs.set_defbbr }}
+      BBG: ${{ inputs.BBG }}
   get-ksu-manager:
     if: ${{ inputs.get_manager }}
     uses: ./.github/workflows/get-manager.yml
