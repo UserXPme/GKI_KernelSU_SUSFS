@@ -100,6 +100,8 @@ jobs:
         kernel_version: ${{ steps.parse.outputs.kernel_version }}
         os_patch_level: ${{ steps.parse.outputs.os_patch_level }}
         use_repo: ${{ inputs.use_repo }}
+        custom: ${{ inputs.custom }}
+        custom_name: ${{ inputs.custom_name }}
 
     - name: Extract Sublevel and Set File Name
       id: extract
