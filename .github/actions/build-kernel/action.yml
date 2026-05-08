@@ -1,6 +1,12 @@
 name: 'Build Kernel'
 description: 'Builds kernel using legacy build.sh or Bazel (kleaf)'
 
+inputs:
+  custom:
+    required: false
+    type: boolean
+    default: false
+
 runs:
   using: composite
   steps:
