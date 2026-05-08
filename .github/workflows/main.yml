@@ -57,6 +57,51 @@ on:
         description: "Use repo for downloading kernel source"
         type: boolean
         default: true
+      add_bypass:
+        description: 'Bypass'
+        required: false
+        type: boolean
+        default: false
+      add_zeromount:
+        description: 'Add ZERoMount support (main)'
+        required: false
+        type: boolean
+        default: false
+      add_nomount:
+        description: 'Add NoMount support'
+        required: false
+        type: boolean
+        default: false
+      add_nomountX:
+        description: 'Add NoMount support (saved/old)'
+        required: false
+        type: boolean
+        default: false
+      add_hymofs:
+        description: 'Enable support for HymoFS'
+        required: false
+        type: boolean
+        default: false
+      skip_proper:
+        description: 'Skip mrproper'
+        required: false
+        type: boolean
+        default: false
+      custom:
+        description: "Custom kernel (AOSP)"
+        required: false
+        type: boolean
+        default: false
+      custom_name:
+        description: "Custom kernel (AOSP) name"
+        required: false
+        type: choice
+        options:
+          - "UserXP"
+          - "playground"
+          - "EvoX"
+          - "zylhdrXP"
+        default: "zylhdrXP"
 
 jobs:
   build-a12-5-10:
@@ -67,6 +112,14 @@ jobs:
       feature_set: ${{ inputs.feature_set || 'FULL' }}
       variant: ${{ inputs.variant || 'Normal' }}
       use_repo: ${{ inputs.use_repo }}
+      add_bypass: ${{ inputs.add_bypass }}
+      add_zeromount: ${{ inputs.add_zeromount }}
+      add_nomount: ${{ inputs.add_nomount }}
+      add_nomountX: ${{ inputs.add_nomountX }}
+      add_hymofs: ${{ inputs.add_hymofs }}
+      skip_proper: ${{ inputs.skip_proper }}
+      custom: ${{ inputs.custom }}
+      custom_name: ${{ inputs.custom_name }}
     secrets: inherit
 
   build-a13-5-10:
