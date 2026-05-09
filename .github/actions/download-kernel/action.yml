@@ -43,6 +43,7 @@ runs:
 
         init_repo() {          
           if ${{ inputs.custom }}; then
+            echo "CUSTOM repo"
             MANIFEST_URL="https://github.com/UserXP-web/kernel_build"
             FORMATTED_BRANCH="main"
             MANIFEST_PATH_NAME="manifest/${{ inputs.custom_name }}.xml"
@@ -50,6 +51,7 @@ runs:
             # Initialize repo with the target branch
             repo init -u ${MANIFEST_URL} -b ${FORMATTED_BRANCH} -m ${MANIFEST_PATH_NAME} --depth=1
           else
+            echo "ORIGinal repo"
             repo init -u https://android.googlesource.com/kernel/manifest -b common-${FORMATTED_BRANCH} --depth=1 || { echo "ERROR: repo init failed" >&2; return 1; }
             REMOTE_BRANCH=$(git ls-remote https://android.googlesource.com/kernel/common ${FORMATTED_BRANCH}) || { echo "ERROR: git ls-remote failed" >&2; return 1; }
             DEFAULT_MANIFEST_PATH=.repo/manifests/default.xml
