@@ -412,7 +412,7 @@ jobs:
 
         cd "kernel/prebuilts-master/clang/host/linux-x86" ################# android kernel
         clangVersion="r584948b" # r383902 r416183b r584948b --- r563880b
-        clang_PATH="clang-$clangVersion"
+        clang_PATH="clang-r563880b" # "clang-$clangVersion"        
         androidVersion="" # 12 or [empty]
         if [ "${clangVersion}" == "r383902" ]; then androidVersion='12'; fi        
         echo "============================================================================================="
