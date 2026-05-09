@@ -32,9 +32,9 @@ runs:
         BUILD_CONFIG=common/build.config.gki.aarch64 \
         build/build.sh -j"$(nproc)" \
         CC="$CC" \
-        CXX="$CXX" \
+        #CXX="$CXX" \
         HOSTCC="$HOSTCC" \
-        HOSTCXX="$HOSTCXX" \
+        #HOSTCXX="$HOSTCXX" \
         LD="$LD" \
         HOSTLD="$HOSTLD"
       else
