@@ -21,6 +21,46 @@ on:
         required: false
         type: string
         default: ""
+      add_bypass:
+        required: false
+        type: boolean
+        default: false
+      use_rekernel:
+        required: false
+        type: boolean
+        default: false
+      add_zeromount:
+        required: false
+        type: boolean
+        default: false
+      add_nomount:
+        required: false
+        type: boolean
+        default: false
+      add_nomountX:
+        required: false
+        type: boolean
+        default: false
+      add_hymofs:
+        required: false
+        type: boolean
+        default: false
+      skip_proper:
+        required: false
+        type: boolean
+        default: false
+      custom:
+        required: false
+        type: boolean
+        default: false
+      custom_name:
+        required: false
+        type: string
+        default: ""
+      is_aosp:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   generate-matrix:
@@ -94,4 +134,14 @@ jobs:
       feature_set: ${{ inputs.feature_set }}
       ksu_branch: ${{ inputs.ksu_branch }}
       susfs_commit: ${{ inputs.susfs_commit }}
+      add_bypass: ${{ inputs.add_bypass }}
+      use_rekernel: ${{ inputs.use_rekernel }}
+      add_zeromount: ${{ inputs.add_zeromount }}
+      add_nomount: ${{ inputs.add_nomount }}
+      add_nomountX: ${{ inputs.add_nomountX }}
+      add_hymofs: ${{ inputs.add_hymofs }}
+      skip_proper: ${{ inputs.skip_proper }}
+      custom: ${{ inputs.custom }}
+      custom_name: ${{ inputs.custom_name }}
+      is_aosp: ${{ inputs.is_aosp }}
     secrets: inherit
