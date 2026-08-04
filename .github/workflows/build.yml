@@ -35,6 +35,46 @@ on:
         required: false
         type: string
         default: ""
+      add_bypass:
+        required: false
+        type: boolean
+        default: false
+      use_rekernel:
+        required: false
+        type: boolean
+        default: false
+      add_zeromount:
+        required: false
+        type: boolean
+        default: false
+      add_nomount:
+        required: false
+        type: boolean
+        default: false
+      add_nomountX:
+        required: false
+        type: boolean
+        default: false
+      add_hymofs:
+        required: false
+        type: boolean
+        default: false
+      skip_proper:
+        required: false
+        type: boolean
+        default: false
+      custom:
+        required: false
+        type: boolean
+        default: false
+      custom_name:
+        required: false
+        type: string
+        default: ""
+      is_aosp:
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   build-gki:
@@ -83,6 +123,8 @@ jobs:
         android_version: ${{ inputs.android_version }}
         kernel_version: ${{ inputs.kernel_version }}
         os_patch_level: ${{ inputs.os_patch_level }}
+        custom: ${{ inputs.custom }}
+        custom_name: ${{ inputs.custom_name }}
 
     - name: Build FUSE-BPF Userspace Daemon (Issue #211)
       if: ${{ contains(inputs.version, 'lts') && inputs.version == 'android16-6.12' }}
@@ -338,7 +380,390 @@ jobs:
     - name: Initialize Config Fragment
       run: touch "${{ github.workspace }}/wild_gki.fragment"
 
+
+
+
+    # ABI protection ###############################################
+    - name: AOSP support - Add CPU-boost stub symbols
+      if: inputs.is_aosp
+      run: |
+        if [ "${{ inputs.custom_name }}" != "zylhdrXP" ]; then exit 0; fi
+        SUB_DIR="kernel/common" # sm7435
+
+        cat > ./$SUB_DIR/drivers/misc/cpu_boost_stub.c << 'EOF'
+        // SPDX-License-Identifier: GPL-2.0-only
+        #include <linux/module.h>
+        #include <linux/export.h>
+
+        int kp_active_mode(void)
+        {
+                return 0;
+        }
+        EXPORT_SYMBOL(kp_active_mode);
+
+        void cpu_boost_kick(int n)
+        {
+        }
+        EXPORT_SYMBOL(cpu_boost_kick);
+        EOF
+        echo "obj-y += cpu_boost_stub.o" >> ./$SUB_DIR/drivers/misc/Makefile
+    - name: Check if BBG
+      if: contains(inputs.feature_set, 'BBG') || inputs.feature_set == 'FULL'
+      run: echo "WITH_BBG=y" >> $GITHUB_ENV
+    - name: Check if NET
+      if: contains(inputs.feature_set, 'NET') || inputs.feature_set == 'FULL'
+      run: echo "WITH_NET=y" >> $GITHUB_ENV
+    - name: Check if DS
+      if: contains(inputs.feature_set, 'DS') || inputs.feature_set == 'FULL'
+      run: echo "WITH_DS=y" >> $GITHUB_ENV
+    - name: Check if SUSFS
+      if: contains(inputs.feature_set, 'SUSFS') || inputs.feature_set == 'FULL'
+      run: echo "WITH_SUSFS=y" >> $GITHUB_ENV
+    - name: Apply ZeroMount Patch
+      if: inputs.add_zeromount && contains(inputs.feature_set, 'SUSFS')
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+          BRANCH="main" # main feature/patch-restructure
+          #ANDROID_VERSION=${{ inputs.android_version }}
+          #KERNEL_VERSION=${{ inputs.kernel_version }}
+          KERNEL_VARIANT=WildKSU
+          #echo "==> Apply Upstream SUSFS Patch"
+          #PATCHNAME=50_add_susfs_in_gki-$ANDROID_VERSION-$KERNEL_VERSION.patch
+          #curl -LSs "https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/$BRANCH/$ANDROID_VERSION-$KERNEL_VERSION/$KERNEL_VARIANT/patches/$PATCHNAME" -o $PATCHNAME
+          #patch -p1 -F3 --no-backup-if-mismatch < "$PATCHNAME"
+          #echo "==> Apply Enhanced SUSFS Patch"
+          #PATCHNAME=51_enhanced_susfs-$ANDROID_VERSION-$KERNEL_VERSION.patch
+          #curl -LSs "https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/$BRANCH/$ANDROID_VERSION-$KERNEL_VERSION/$KERNEL_VARIANT/patches/$PATCHNAME" -o $PATCHNAME
+          #patch -p1 -F3 --no-backup-if-mismatch < "$PATCHNAME"        
+          #echo "==> Apply KSU Safety Patch..."
+          #cd ../Wild_KSU
+          #PATCHNAME=70_ksu_safety-wksu-$KERNEL_VERSION.patch
+          #curl -LSs "https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/$BRANCH/$ANDROID_VERSION-$KERNEL_VERSION/$KERNEL_VARIANT/patches/$PATCHNAME" -o $PATCHNAME
+          #[ -s "$PATCHNAME" ] && patch -p1 --no-backup-if-mismatch < "$PATCHNAME" || echo "No 70_ patch needed"
+          #cd ../common
+
+          PATCHNAME=60_zeromount-$ANDROID_VERSION-$KERNEL_VERSION.patch          
+          curl -LSs "https://raw.githubusercontent.com/Enginex0/Super-Builders/refs/heads/$BRANCH/$ANDROID_VERSION-$KERNEL_VERSION/$KERNEL_VARIANT/patches/$PATCHNAME" -o $PATCHNAME
+          patch -p1 -F3 --no-backup-if-mismatch < "$PATCHNAME"
+    - name: NoMount
+      if: inputs.add_nomount || inputs.add_nomountX
+      #working-directory: ${{ env.KERNEL_ROOT }}/common
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        echo ""
+        echo "=== NoMount patch ==="
+        ###########cd "$KERNEL_ROOT/common" # cd "$CONFIG/common"
+
+        if [ "${{ inputs.add_nomount }}" == "true" ]; then
+          MASTER_EXP="master" # master dev
+          echo "  Copying files to fs/..."
+          curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/$MASTER_EXP/kernel/src/nomount.h" -o ./fs/nomount.h
+          curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/$MASTER_EXP/kernel/src/nomount.c" -o ./fs/nomount.c
+          #curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/patches/nomount/edit/nomount.h" -o ./fs/nomount.h
+          #curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/patches/nomount/edit/nomount.c" -o ./fs/nomount.c
+          echo "  Done."
+          echo "  <> LIVE/latest patch ($MASTER_EXP)"
+          curl -LSs "https://raw.githubusercontent.com/maxsteeel/nomount/refs/heads/$MASTER_EXP/kernel/patches/nomount_5.10_kernel_integration.patch" -o nomount.patch
+        else
+          echo "  Copying files to fs/..."
+          curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/patches/nomount/edit/nomount.h" -o ./fs/nomount.h
+          curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/patches/nomount/edit/nomount.c" -o ./fs/nomount.c
+          echo "  Done."
+          echo "  <> Patches with edits by UserXP"
+          curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/patches/nomount/edit/nomount_5.10_kernel_integration.patch" -o nomount.patch
+        fi
+        chmod 777 nomount.patch
+        echo "Applying..."
+        patch -p1 < nomount.patch # > patch_nomount_log.txt 2>&1
+        echo "=== END NoMount patch ==="
+
+    - name: HymoFS support
+      if: ${{ inputs.add_hymofs }}
+      #working-directory: ${{ env.KERNEL_ROOT }}/common
+      working-directory: ${{ github.workspace }}/kernel/common
+      run: |
+        echo "[💠] Apply HymoFS"
+        #########cd "$CONFIG/common" # cd $KERNEL_DIR 
+
+        # HymoFS One-Line Setup Script
+        # Usage: curl -LSs https://raw.githubusercontent.com/Anatdx/HymoFS/main/setup.sh | bash -s defconfig arch/arm64/configs/gki_defconfig with-susfs
+        if [ "${{ env.WITH_SUSFS }}" == "" ]; then 
+          #curl -LSs https://raw.githubusercontent.com/Anatdx/HymoFS/main/setup.sh | bash -s defconfig arch/arm64/configs/gki_defconfig
+          curl -LSs https://raw.githubusercontent.com/UserXP-web/kernel_build/main/patches/hymofs/setup.sh | bash -s defconfig "$GITHUB_WORKSPACE/wild_gki.fragment"
+        else
+          #curl -LSs https://raw.githubusercontent.com/Anatdx/HymoFS/main/setup.sh | bash -s defconfig "$GITHUB_WORKSPACE/wild_gki.fragment"
+          curl -LSs https://raw.githubusercontent.com/UserXP-web/kernel_build/main/patches/hymofs/setup.sh | bash -s defconfig "$GITHUB_WORKSPACE/wild_gki.fragment"
+        fi
+        #curl -LSs "https://raw.githubusercontent.com/Anatdx/HymoFS/refs/heads/android12_5.10/patch/hymofs.patch" -o hymofs.patch
+        #patch -p1 --fuzz=3 < hymofs.patch
+        echo "[✅] Done HymoFS."
+
+    # ==================== Apply Re-Kernel ====================
+    # Re-Kernel provides kernel-level protection through GKI Vendor Hooks.
+    - name: Apply Re-Kernel
+      if: ${{ inputs.use_rekernel }}
+      working-directory: ${{ github.workspace }}/kernel
+      run: |
+        set -e
+        echo "Integrating Re-Kernel..."
+        TMP_REKERNEL=/tmp/rekernel
+        rm -rf "$TMP_REKERNEL"
+        git clone --depth 1 https://github.com/Sakion-Team/Re-Kernel.git "$TMP_REKERNEL"
+
+        # Prepare driver source code
+        mkdir -p common/drivers/rekernel
+        cp "$TMP_REKERNEL/LKM-Source/rekernel.c" common/drivers/rekernel/
+        cp "$TMP_REKERNEL/LKM-Source/rekernel.h" common/drivers/rekernel/
+
+        # Generate build configuration
+        cat > common/drivers/rekernel/Kconfig << 'EOF'
+        menu "Re:Kernel"
+        config REKERNEL
+            bool "Re:Kernel support (GKI Vendor Hooks)"
+            default y
+            help
+              Enable Re-Kernel support via GKI Vendor Hooks.
+
+        config REKERNEL_NETWORK
+            bool "Re:Kernel NetReceive unfreeze support"
+            depends on REKERNEL
+            default n
+        endmenu
+        EOF
+
+        cat > common/drivers/rekernel/Makefile << 'EOF'
+        obj-$(CONFIG_REKERNEL) += rekernel.o
+        ccflags-$(CONFIG_REKERNEL_NETWORK) += -DNETWORK_FILTER
+        EOF
+
+        # Mount to driver tree
+        if ! grep -qF 'source "drivers/rekernel/Kconfig"' common/drivers/Kconfig; then
+          sed -i '/^endmenu$/i source "drivers/rekernel/Kconfig"' common/drivers/Kconfig
+        fi
+        if ! grep -qF 'obj-$(CONFIG_REKERNEL) += rekernel/' common/drivers/Makefile; then
+          echo 'obj-$(CONFIG_REKERNEL) += rekernel/' >> common/drivers/Makefile
+        fi
+
+        # Enable kernel version macros
+        REKERNEL_H="common/drivers/rekernel/rekernel.h"
+        VERSION_MACRO="KERNEL_$(echo "${{ inputs.kernel_version }}" | tr '.' '_')"
+        if grep -q "^// #define ${VERSION_MACRO}$" "$REKERNEL_H"; then
+          sed -i "s|^// #define ${VERSION_MACRO}$|#define ${VERSION_MACRO}|" "$REKERNEL_H"
+        fi
+
+        # Correct header file include paths (for in-tree compilation)
+        sed -i 's|#include <../android/binder_internal.h>|#include "../../drivers/android/binder_internal.h"|g' common/drivers/rekernel/rekernel.c
+        # Complete the binder_internal dependency (to avoid the DEFINE_SHOW_ATTRIBUTE error in 5.10).
+        grep -qF '#include <linux/seq_file.h>' common/drivers/rekernel/rekernel.c || sed -i '/#include <trace\/hooks\/signal.h>/a #include <linux/seq_file.h>' common/drivers/rekernel/rekernel.c
+
+        # Configure defconfig (idempotent)
+        DEFCONFIG=${{ github.workspace }}/kernel/common/arch/arm64/configs/gki_defconfig
+        grep -q '^CONFIG_REKERNEL=y$' "$DEFCONFIG" || echo "CONFIG_REKERNEL=y" >> "$DEFCONFIG"
+        grep -q '^CONFIG_REKERNEL_NETWORK=y$' "$DEFCONFIG" || echo "CONFIG_REKERNEL_NETWORK=y" >> "$DEFCONFIG"
+
+    - name: NAME_INFO and Config
+      run: |
+        NAME_INFO="${{ env.NAME_INFO }}"
+        if [[ "${{ inputs.is_aosp }}" == "true" ]]; then NAME_INFO="${NAME_INFO}_AOSP"; fi        
+        CONFIG_FILE="$GITHUB_WORKSPACE/kernel/common/arch/arm64/configs/gki_defconfig" # "$GITHUB_WORKSPACE/wild_gki.fragment"
+
+        if [[ "${{ inputs.custom }}" == "true" ]]; then NAME_INFO="${NAME_INFO}_${{ inputs.custom_name }}"; fi
+        if [[ "${{ inputs.add_zeromount }}" == "true" ]]; then NAME_INFO="${NAME_INFO}_Zero"; fi
+        if [[ "${{ inputs.add_nomount }}" == "true" ]] || [[ "${{ inputs.add_nomountX }}" == "true" ]]; then
+          if [ "${{ inputs.add_nomountX }}" == "true" ]; then IS_X="X"; fi
+          NAME_INFO="${NAME_INFO}_NoMount$IS_X"
+          #echo "CONFIG_NOMOUNT=y" >> "$CONFIG_FILE"
+        fi
+        if [[ "${{ inputs.add_hymofs }}" == "true" ]]; then NAME_INFO="${NAME_INFO}_hymofs"; fi
+
+        #if [ "${{ inputs.bypass_unicode }}" == "true" ]; then NAME_INFO="${NAME_INFO}_uni"; fi
+        #if [ "${{ inputs.enable_susfs }}" == "true" ]; then NAME_INFO="${NAME_INFO}_uni"; fi
+        #if [ "${{ inputs.use_zram }}" == "true" ]; then NAME_INFO="${NAME_INFO}_zram"; fi
+        if [ "${{ env.WITH_BBG }}" == "y" ]; then NAME_INFO="${NAME_INFO}_bbg"; fi
+        if [ "${{ inputs.use_rekernel }}" == "true" ]; then NAME_INFO="${NAME_INFO}_re"; fi
+        if [ "${{ env.WITH_NET }}" == "y" ]; then NAME_INFO="${NAME_INFO}_net"; fi
+        if [ "${{ env.WITH_DS }}" == "y" ]; then NAME_INFO="${NAME_INFO}_ds"; fi
+        #if [ "${{ inputs.use_kpm }}" == "true" ]; then NAME_INFO="${NAME_INFO}_kpm"; fi
+        #if [ "${{ inputs.enable_tmpfs }}" == "true" ]; then NAME_INFO="${NAME_INFO}_tmpfs"; fi
+        NAME_INFO="${NAME_INFO}_tmpfs"
+        if [ "${{ env.WITH_SUSFS }}" == "y" ]; then NAME_INFO="${NAME_INFO}_susfs"; fi
+        if [ "${{ inputs.add_bypass }}" == "true" ] || [ ${{ inputs.variant }} == 'Bypass' ]; then NAME_INFO="-Bypass${NAME_INFO}"; fi
+
+        NAME_INFO="${NAME_INFO}_$(date +'%d.%m.%y')"
+        echo "NAME_INFO=$NAME_INFO" >> $GITHUB_ENV
+        echo "***WILD*** NAME_INFO=$NAME_INFO"
+
+        cat >> "$CONFIG_FILE" << 'EOF'
+        #CONFIG_BPF_STREAM_PARSER=y # NOT this
+        #CONFIG_NETFILTER_XT_MATCH_ADDRTYPE=y
+        #CONFIG_NETFILTER_XT_SET=y
+        #CONFIG_IP6_NF_NAT=y
+        #CONFIG_IP6_NF_TARGET_MASQUERADE=y
+        CONFIG_KSU_SUSFS_SUS_KSTAT_REDIRECT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_KSU_DEFAULT_MOUNT=y
+        CONFIG_KSU_SUSFS_AUTO_ADD_SUS_BIND_MOUNT=y
+        EOF
+
+    - name: NoMount Config
+      if: ${{ inputs.add_nomount || inputs.add_nomountX }}
+      uses: ./.github/actions/set-kernel-config
+      with:
+        config_list: |
+          CONFIG_NOMOUNT=y
+    - name: CORRECT stupid
+      shell: bash
+      if: inputs.custom
+      run: |
+        SUB_DIR="kernel/common" # sm7435
+        curl -LSs "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/correct/bootconfig.c" -o ./$SUB_DIR/fs/proc/bootconfig.c
+
+        # Remove check_defconfig
+        #sed -i 's|^POST_DEFCONFIG_CMDS=.*|POST_DEFCONFIG_CMDS=""|' "$GITHUB_WORKSPACE/$SUB_DIR/build.config.gki"
+        sed -i 's/check_defconfig//' ./$SUB_DIR/build.config.gki
+
+    - name: 📝 clang...
+      env:
+        Use_Neutron_Clang: false
+        Neutron_Clang_LINK: "https://raw.githubusercontent.com/Neutron-Toolchains/antman/main/antman"
+        CLANG_VERSION: "r563880c" ### NEW_CLANG_LINK="${CLANG_LINK/\{CLANG_VERSION\}/$CLANG_VERSION}" BELLOW
+        CLANG_LINK: "https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/android16-qpr2-release/clang-r563880c.tar.gz"
+      if: inputs.custom
+      run: |
+        #sudo apt update
+        #sudo apt install clang libc++-dev build-essential g++
+        #clang --version
+
+        #sudo apt-get install lld
+        #sudo apt-get install llvm
+
+        cd "kernel"
+        mkdir -p clang
+        if [ "${{ env.Use_Neutron_Clang }}" == "true" ]; then
+          # Κατέβασμα και εγκατάσταση του Neutron Clang (Clang 21 + LTO + Polly)
+          cd clang
+          curl -L "${{ env.Neutron_Clang_LINK }}" -o antman
+          chmod +x antman
+          ./antman -S=latest            
+        else
+          # Κατέβασμα Clang στο παρασκήνιο (Background)
+          #if [ "${{ steps.clang-cache.outputs.cache-hit }}" != "true" ]; then
+          #  set -e # stop in 1st error            
+            echo "Cache miss — downloading clang-${{ env.CLANG_VERSION }}..."
+            aria2c -x16 -s16 -k1M -j16 --retry-wait=5 --max-tries=10 \
+              -d /tmp -o clang-${{ env.CLANG_VERSION }}.tar.gz \
+              "${{ env.CLANG_LINK }}"
+            tar -C ./clang -zxf /tmp/clang-${{ env.CLANG_VERSION }}.tar.gz
+            rm -f /tmp/clang-${{ env.CLANG_VERSION }}.tar.gz
+          #else
+          #  echo "Clang restored from cache, skipping download."
+          #fi
+        fi
+
+        mkdir -p "$GITHUB_WORKSPACE/kernel/prebuilts-master/clang/host/linux-x86"
+        rm -rf "$GITHUB_WORKSPACE/kernel/prebuilts-master/clang/host/linux-x86/clang-r563880b"
+        ln -s "$GITHUB_WORKSPACE/kernel/clang" "$GITHUB_WORKSPACE/kernel/prebuilts-master/clang/host/linux-x86/clang-r563880b" # symlink
+        #echo "$GITHUB_WORKSPACE/kernel/clang/bin" >> $GITHUB_PATH
+        #WORKDIR="$(pwd)"
+        #export PATH="$WORKDIR/clang/bin:$PATH"
+        #export PATH="/usr/lib/ccache:$PATH"
+        #echo "PATH=$PATH"
+    - name: 🔨 Build AOSP Kernel (Full Xiaomi Kconfig Overhaul)
+      env:
+        kernel_modules_link: "https://github.com/zylhdrXP/android_kernel_xiaomi_sm7435-modules"
+        kernel_modules_branch: "lineage-23.2"
+        FINAL_CONFIG_LINK: "https://raw.githubusercontent.com/UserXP-web/kernel_build/refs/heads/main/configs/config_from_fleurx"
+      if: inputs.is_aosp
+      run: |
+        if [ "${{ inputs.custom_name }}" != "zylhdrXP" ]; then exit 0; fi
+        SUB_DIR="kernel/common" # sm7435
+        
+        WORKDIR="$(pwd)"
+        export MAP="-fdebug-prefix-map=${GITHUB_WORKSPACE}=. -fmacro-prefix-map=${GITHUB_WORKSPACE}=. -ffile-prefix-map=${GITHUB_WORKSPACE}=."
+        export PATH="$GITHUB_WORKSPACE/kernel/clang/bin:$GITHUB_WORKSPACE/kernel/build-tools/linux-x86/bin:$PATH"
+        #export CCACHE_DIR="${{ env.CCACHE_DIR }}"
+        #export CCACHE_LOGFILE="${{ github.workspace }}/ccache.log"
+        #export CCACHE_IS_KERNEL_COMPILING=true
+
+        echo "Cloning sm7435-modules..." #######################################################################################
+        rm -rf sm7435-modules 2>/dev/null || true
+        git clone --depth=1 "${{ env.kernel_modules_link }}" -b "${{ env.kernel_modules_branch }}" sm7435-modules
+        echo "Downloading config_from_fleurx..."
+        mkdir -p /home/runner/out
+        curl -L "${{ env.FINAL_CONFIG_LINK }}" -o /home/runner/out/.config
+
+        # Mπαίνουμε στη ρίζα του πυρήνα
+        cd $SUB_DIR # $GITHUB_WORKSPACE/sm7435
+
+        # Επαναφέρουμε όλο το repository σε pristine εργοστασιακή κατάσταση
+        git checkout HEAD -- drivers/gpu/drm/msm/ Makefile
+        git clean -fd drivers/gpu/drm/msm/
+        rm -rf techpack/display techpack/audio techpack/video techpack/mmrm 2>/dev/null || true
+
+        # Στήσιμο Flat Layout των Techpacks στην εργοστασιακή τους μορφή (Ως Modules)
+        cp -r $GITHUB_WORKSPACE/sm7435-modules/qcom/opensource/display-drivers ./techpack/display
+        cp -r $GITHUB_WORKSPACE/sm7435-modules/qcom/opensource/audio-kernel ./techpack/audio
+        cp -r $GITHUB_WORKSPACE/sm7435-modules/qcom/opensource/video-driver ./techpack/video
+        cp -r $GITHUB_WORKSPACE/sm7435-modules/qcom/opensource/mmrm-driver ./techpack/mmrm
+
+        # LTO Wrapper setup
+        mkdir -p $GITHUB_WORKSPACE/ldcache_garnet
+        echo '#!/bin/bash' > ld-wrapper
+        echo 'ld.lld "$@" --lto-cache-dir=$GITHUB_WORKSPACE/ldcache_garnet --lto-partitions=2' >> ld-wrapper
+        chmod +x ld-wrapper
+
+        export CC="ccache clang"
+        export LD="$(pwd)/ld-wrapper"
+        export HOSTLD="$(pwd)/ld-wrapper"
+        export AR=llvm-ar
+        export NM=llvm-nm
+        export OBJCOPY=llvm-objcopy
+        export OBJDUMP=llvm-objdump
+        export STRIP=llvm-strip
+
+        make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=/home/runner/out \
+                    CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+                    TECHPACK=y \
+                    DISPLAY_ROOT=techpack/display \
+                    VIDEO_ROOT=techpack/video \
+                    AUDIO_ROOT=techpack/audio \
+                    MMRM_ROOT=techpack/mmrm \
+                    olddefconfig
+
+        if [ -f "/home/runner/out/.config" ]; then
+          # Force FleurX Identity και απενεργοποίηση των frame warnings
+          sed -i '/CONFIG_LOCALVERSION/d' /home/runner/out/.config
+          echo 'CONFIG_LOCALVERSION="-FleurX"' >> /home/runner/out/.config
+          sed -i '/CONFIG_FRAME_WARN/d' /home/runner/out/.config
+          echo "CONFIG_FRAME_WARN=0" >> /home/runner/out/.config
+        else
+          echo "NOT!!! exist(?) /home/runner/out/.config"
+        fi
+
+        make -j$(nproc --all) LLVM=1 LLVM_IAS=1 ARCH=arm64 O=/home/runner/out \
+                    CROSS_COMPILE_COMPAT=arm-linux-gnueabi- \
+                    TECHPACK=y \
+                    DISPLAY_ROOT=techpack/display \
+                    VIDEO_ROOT=techpack/video \
+                    AUDIO_ROOT=techpack/audio \
+                    MMRM_ROOT=techpack/mmrm \
+                    Image
+
+        set -euo pipefail
+        if [ -f "/home/runner/out/arch/arm64/boot/Image" ]; then
+          echo "Found Image at /home/runner/out/arch/arm64/boot/Image"
+          cp "/home/runner/out/arch/arm64/boot/Image" "${{ github.workspace }}/AnyKernel3/Image"
+          echo "Kernel Version:"
+          strings "/home/runner/out/arch/arm64/boot/Image" | grep -m1 "^Linux version "
+        else
+          echo "NOT Found any Image"
+        fi
+
+
+
+
+
     - name: Build Normal Kernel
+      if: ${{ !inputs.is_aosp }}
       env:
         SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
         KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
@@ -346,6 +771,7 @@ jobs:
       with:
         version: ${{ inputs.version }}
         bypass: false
+        custom: ${{ inputs.custom }}
 
     - name: Get Cache Stats
       uses: ./.github/actions/cache-stats
@@ -375,6 +801,7 @@ jobs:
         github_token: ${{ secrets.MY_GITHUB_TOKEN }}
 
     - name: Build Bypass Kernel
+      if: ${{ !inputs.is_aosp && inputs.add_bypass }}
       env:
         SOURCE_DATE_EPOCH: ${{ env.SOURCE_DATE_EPOCH }}
         KBUILD_BUILD_TIMESTAMP: ${{ env.KBUILD_BUILD_TIMESTAMP }}
@@ -382,6 +809,7 @@ jobs:
       with:
         bypass: true
         version: ${{ inputs.version }}
+        custom: ${{ inputs.custom }}
 
     - name: 📋 Consolidated Build Summary
       if: ${{ always() }}
@@ -460,7 +888,7 @@ jobs:
     - name: Upload Artifacts
       uses: actions/upload-artifact@v7
       with:
-        name: ${{ steps.extract.outputs.file_name }}-AnyKernel3
+        name: ${{ steps.extract.outputs.file_name }}${{ env.NAME_INFO }}-AnyKernel3
         path: ${{ github.workspace }}/AnyKernel3/**
         if-no-files-found: ignore
         compression-level: 9
