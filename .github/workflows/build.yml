@@ -730,9 +730,8 @@ jobs:
                     olddefconfig
 
         if [ -f "/home/runner/out/.config" ]; then
-          # Force FleurX Identity και απενεργοποίηση των frame warnings
           sed -i '/CONFIG_LOCALVERSION/d' /home/runner/out/.config
-          echo 'CONFIG_LOCALVERSION="-FleurX"' >> /home/runner/out/.config
+          echo 'CONFIG_LOCALVERSION="-UserXP"' >> /home/runner/out/.config
           sed -i '/CONFIG_FRAME_WARN/d' /home/runner/out/.config
           echo "CONFIG_FRAME_WARN=0" >> /home/runner/out/.config
         else
